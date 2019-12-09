@@ -1,0 +1,48 @@
+FEATURES:
+
+- pokemon_1 (em vez do ID, probably 6 inputs de stats, 
+    8 de stat changes, 1 de nivel, 1 de género, 1 de current hp,
+    2 de types, 1 de status [including fainted], 1 de confusion,
+    1 de taunted, 1 de substitute, e 1 flag de active or not)
+- pokemon_2 "
+- pokemon_3 "
+- pokemon_4 "
+- pokemon_5 "
+- pokemon_6 "
+- opponent_pokemon_1 "
+- opponent_pokemon_2 "
+- opponent_pokemon_3 "
+- opponent_pokemon_4 "
+- opponent_pokemon_5 "
+- opponent_pokemon_6 "
+- pokemon_1_move_1 (prabably split entre power, accuracy, type, 
+    category, n. of turns, priority, effect e effect_chance)
+- (Para 4 moves para cada pokémon, em 6 pokémons)
+- (Igual, mas para os pokemons do oponente,
+    apenas com os moves conhecidos??)
+- stealth_rocks
+- reflect
+- light_screen
+- seeded
+- binded
+- opponent_stealth_rocks
+- opponent_reflect
+- opponent_light_screen
+- opponent_seeded
+- opponent_binded
+
+LABELS:
+
+- Action (Escolher um dos 4 moves, ou um até o máximo de 5 switches)
+
+ou (em chance de escolher)
+
+- Move 1
+- Move 2
+- Move 3
+- Move 4
+- Switch 1
+- Switch 2
+- Switch 3
+- Switch 4
+- Switch 5

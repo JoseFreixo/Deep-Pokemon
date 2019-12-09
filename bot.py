@@ -7,7 +7,6 @@ from poke_env.player.utils import cross_evaluate
 from poke_env.player_configuration import PlayerConfiguration
 from poke_env.server_configuration import LocalhostServerConfiguration
 
-
 class MaxDamagePlayer(Player):
     def choose_move(self, battle):
         # If the player can attack, it will
@@ -20,7 +19,6 @@ class MaxDamagePlayer(Player):
         else:
             return self.choose_random_move(battle)
 
-
 async def main():
     start = time.time()
 
@@ -31,12 +29,12 @@ async def main():
     # We create the corresponding players.
     random_player = RandomPlayer(
         player_configuration=player_1_configuration,
-        battle_format="gen7randombattle",
+        battle_format="gen7letsgorandombattle",
         server_configuration=LocalhostServerConfiguration,
     )
     max_damage_player = MaxDamagePlayer(
         player_configuration=player_2_configuration,
-        battle_format="gen7randombattle",
+        battle_format="gen7letsgorandombattle",
         server_configuration=LocalhostServerConfiguration,
     )
 
