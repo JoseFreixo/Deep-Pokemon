@@ -1,12 +1,12 @@
 FEATURES:
 
-- pokemon_1 (Current hp, Speed, Para, Poison, Sleep, Frozen, Burned, Confusion, Fainted)
+- pokemon_1 (Current hp, Speed, Para, Poison, Sleep, Frozen, Burned, Confusion)
 - pokemon_2 (Current hp, Para, Poison, Sleep, Frozen, Burned, Fainted)
 - pokemon_3 "
 - pokemon_4 "
 - pokemon_5 "
 - pokemon_6 "
-- opponent_pokemon_1 (Current hp, Speed, Para, Poison, Sleep, Frozen, Burned, Confusion, Fainted)
+- opponent_pokemon_1 (Current hp, Speed, Para, Poison, Sleep, Frozen, Burned, Confusion)
 - opponent_pokemon_2 (Current hp, Para, Poison, Sleep, Frozen, Burned, Fainted)
 - opponent_pokemon_3 "
 - opponent_pokemon_4 "
@@ -15,6 +15,10 @@ FEATURES:
 - move_1 ( (power * X_Atk * acc) / (X_Def), secondary, priority)
 - (Para 4 moves)
 - opponent_move_1 ( (power * X_Atk * acc) / (X_Def), secondary, priority)
+- (Para 4 moves)
+
+(8 + 7 * 5) * 2 + 8
+94
 
 LABELS: (em chance)
 
@@ -27,3 +31,5 @@ LABELS: (em chance)
 - Switch 3
 - Switch 4
 - Switch 5
+
+9
