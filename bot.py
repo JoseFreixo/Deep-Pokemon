@@ -1,6 +1,6 @@
 import asyncio
 import time
-import battle_utils
+import battle_utils as bu
 
 import numpy as np
 
@@ -48,15 +48,8 @@ class PokeAgent(TrainablePlayer):
             return self.choose_random_move(battle)
 
     def battle_to_state(self, battle: Battle):
-        level = battle.active_pokemon.level
-        # hp, atk, def, spa, spd, spe
-        speed = battle.active_pokemon.base_stats.get("spe")
-        speed = ((2 * speed + 31) * level / 100 + 5) * 1.1 * 1.1 + 200
-        
         state = np.array([])
-        state = np.append(state, [battle.active_pokemon.current_hp_fraction])
-        state = np.append(state, [speed])
-        state = np.append(state, battle_utils.getPokemonStatus(battle.active_pokemon))
+        state = np.append(state, bu.getTeamFeatures(battle.team, battle.active_pokemon))
         return None
         
 
