@@ -57,3 +57,32 @@ def getTeamFeatures(team: Dict, active_poke: Pokemon):
     for i in range(missing):
         state = np.append(state, [1, 0, 0, 0, 0, 0, 0])
     return state
+
+def getMovesInfo(own_poke: Pokemon, opp_poke: Pokemon):
+    state = np.array([])
+    moves = own_poke.moves
+
+    for key in moves:
+        if (moves[key].category.name == "PHYSICAL"):
+            power = moves[key].base_power * own_poke.base_stats.get("atk") * moves[key].accuracy / opp_poke.base_stats.get("def")
+            secondary = 0.0
+            if (moves[key].secondary != None):
+                secondary = moves[key].secondary.get("chance") / 100
+            state = np.append(state, [power, secondary, moves[key].priority])
+        
+        elif (moves[key].category.name == "SPECIAL"):
+            power = moves[key].base_power * own_poke.base_stats.get("spa") * moves[key].accuracy / opp_poke.base_stats.get("spd")
+            secondary = 0.0
+            if (moves[key].secondary != None):
+                secondary = moves[key].secondary.get("chance") / 100
+            state = np.append(state, [power, secondary, moves[key].priority])
+        
+        elif (moves[key].category.name == "STATUS"):
+            state = np.append(state, [0, moves[key].accuracy, moves[key].priority])
+
+    missing = 4 - len(moves)
+    for i in range(missing):
+        state = np.append(state, [0, 0, 0])
+
+    return state
+        

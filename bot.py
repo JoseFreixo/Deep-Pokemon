@@ -53,7 +53,12 @@ class PokeAgent(TrainablePlayer):
         state = np.append(state, bu.getTeamFeatures(battle.team, battle.active_pokemon))
         # ----- Add opponent team info ----- #
         state = np.append(state, bu.getTeamFeatures(battle.opponent_team, battle.opponent_active_pokemon))
-        
+        # ----- Add own moves info ----- #
+        state = np.append(state, bu.getMovesInfo(battle.active_pokemon, battle.opponent_active_pokemon))
+        # ----- Add opponent moves info ----- #
+        state = np.append(state, bu.getMovesInfo(battle.opponent_active_pokemon, battle.active_pokemon))
+        print("------------ STATE HERE ------------")
+        print(state)
         return state
         
 
@@ -69,7 +74,7 @@ async def main():
 
     # We define two player configurations.
     player_1_configuration = PlayerConfiguration("Agent player", None)
-    player_2_configuration = PlayerConfiguration("Max damage player", None)
+    player_2_configuration = PlayerConfiguration("Random player", None)
 
     # We create the corresponding players.
     agent_player = PokeAgent(
@@ -77,13 +82,13 @@ async def main():
         battle_format="gen7letsgorandombattle",
         server_configuration=LocalhostServerConfiguration,
     )
-    max_damage_player = MaxDamagePlayer(
+    random_player = RandomPlayer(
         player_configuration=player_2_configuration,
         battle_format="gen7letsgorandombattle",
         server_configuration=LocalhostServerConfiguration,
     )
 
-    await agent_player.train_against(max_damage_player, 1)
+    await agent_player.train_against(random_player, 1)
 
     # Now, let's evaluate our player
     # cross_evaluation = await cross_evaluate(
