@@ -61,8 +61,8 @@ class PokeAgent(TrainablePlayer):
         print(state)
         return state
         
-
     def state_to_action(self, state: np.array, battle: Battle):
+        # self.model.predict(state) Terá que ser algo assim
         pass
 
     def replay(self, battle_history: Dict):
