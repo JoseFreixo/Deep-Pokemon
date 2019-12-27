@@ -49,15 +49,20 @@ class PokeAgent(TrainablePlayer):
 
     def battle_to_state(self, battle: Battle):
         state = np.array([])
+        # ----- Add own team info ----- #
         state = np.append(state, bu.getTeamFeatures(battle.team, battle.active_pokemon))
-        return None
+        # ----- Add opponent team info ----- #
+        state = np.append(state, bu.getTeamFeatures(battle.opponent_team, battle.opponent_active_pokemon))
+        
+        return state
         
 
     def state_to_action(self, state: np.array, battle: Battle):
         pass
 
     def replay(self, battle_history: Dict):
-        print(battle_history)
+        # print(battle_history)
+        pass
 
 async def main():
     start = time.time()

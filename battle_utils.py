@@ -40,7 +40,7 @@ def getTeamFeatures(team: Dict, active_poke: Pokemon):
     level = active_poke.level
     # hp, atk, def, spa, spd, spe
     speed = active_poke.base_stats.get("spe")
-    speed = ((2 * speed + 31) * level / 100 + 5) * 1.1 * 1.1 + 200
+    # speed = ((2 * speed + 31) * level / 100 + 5) * 1.1 * 1.1 + 200
     state = np.append(state, [active_poke.current_hp_fraction])
     state = np.append(state, [speed])
     state = np.append(state, getPokemonStatus(active_poke))
@@ -52,4 +52,8 @@ def getTeamFeatures(team: Dict, active_poke: Pokemon):
         state = np.append(state, [team[key].current_hp_fraction])
         state = np.append(state, getPokemonStatus(team[key]))
         state = np.append(state, getPokemonFainted(team[key]))
+
+    missing = 6 - len(team)
+    for i in range(missing):
+        state = np.append(state, [1, 0, 0, 0, 0, 0, 0])
     return state
