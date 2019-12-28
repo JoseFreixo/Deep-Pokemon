@@ -15,7 +15,8 @@ from poke_env.server_configuration import LocalhostServerConfiguration
 from typing import Dict
 
 from keras.models import Sequential
-from keras.layers import Dense
+from keras.layers import Dense, Activation
+from keras.optimizers import Adam
 
 class MaxDamagePlayer(Player):
     def choose_move(self, battle):
@@ -32,10 +33,15 @@ class MaxDamagePlayer(Player):
 class PokeAgent(TrainablePlayer):
     def init_model(self):
         self.model = Sequential()
-        self.model.add(Dense(94, input_dim=94))
-        self.model.add(Dense(94))
-        self.model.add(Dense(94))
+        self.model.add(Dense(110, input_shape=(110,)))
+        self.model.add(Activation('sigmoid'))
+        self.model.add(Dense(110))
+        self.model.add(Activation('sigmoid'))
+        self.model.add(Dense(110))
+        self.model.add(Activation('sigmoid'))
         self.model.add(Dense(9))
+        self.model.add(Activation('softmax'))
+        self.model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
 
     def action_to_move(self, action, battle: Battle):
         if battle.available_moves:
@@ -57,12 +63,13 @@ class PokeAgent(TrainablePlayer):
         state = np.append(state, bu.getMovesInfo(battle.active_pokemon, battle.opponent_active_pokemon))
         # ----- Add opponent moves info ----- #
         state = np.append(state, bu.getMovesInfo(battle.opponent_active_pokemon, battle.active_pokemon))
-        print("------------ STATE HERE ------------")
-        print(state)
         return state
         
     def state_to_action(self, state: np.array, battle: Battle):
-        # self.model.predict(state) Terá que ser algo assim
+        print("Antes do predict")
+        actions = self.model.predict(state)
+        print("----------- ACTIONS HERE -----------")
+        print(actions)
         pass
 
     def replay(self, battle_history: Dict):
