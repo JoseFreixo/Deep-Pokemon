@@ -2,7 +2,7 @@
 
 ## Setup
 
-### Install poke_env
+### Install poke-env
 https://github.com/hsahovic/poke-env
 ```
 pip install poke-env
