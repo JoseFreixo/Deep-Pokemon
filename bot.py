@@ -32,16 +32,12 @@ class MaxDamagePlayer(Player):
 
 class PokeAgent(TrainablePlayer):
     def init_model(self):
-        self.model = Sequential()
-        self.model.add(Dense(110, input_shape=(110,)))
-        self.model.add(Activation('sigmoid'))
-        self.model.add(Dense(110))
-        self.model.add(Activation('sigmoid'))
-        self.model.add(Dense(110))
-        self.model.add(Activation('sigmoid'))
-        self.model.add(Dense(9))
-        self.model.add(Activation('softmax'))
-        self.model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
+        model = Sequential()
+        model.add(Dense(110, activation="relu", input_shape=(110,)))
+        model.add(Dense(110, activation="relu"))
+        model.add(Dense(9, activation="softmax"))
+        model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
+        return model
 
     def action_to_move(self, action, battle: Battle):
         if battle.available_moves:
