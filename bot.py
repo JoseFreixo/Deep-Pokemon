@@ -21,11 +21,6 @@ from keras.optimizers import Adam
 from tensorflow.python.keras import backend as K
 import tensorflow as tf
 
-# config = tf.compat.v1.ConfigProto()
-# config.gpu_options.allow_growth = True
-# session = tf.compat.v1.Session(config=config)
-# K.set_session(session)
-
 class MaxDamagePlayer(Player):
     def choose_move(self, battle):
         # If the player can attack, it will
@@ -109,7 +104,7 @@ class PokeAgent(TrainablePlayer):
         print("Antes do predict")
         with self.graph.as_default():
             with self.session.as_default():
-                actions = self.model.predict_on_batch(state)
+                actions = self.model.predict(state)
         print("----------- ACTIONS HERE -----------")
         print(actions)
         pass
