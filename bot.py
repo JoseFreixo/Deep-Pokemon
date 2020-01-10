@@ -21,6 +21,8 @@ from keras.optimizers import Adam
 from tensorflow.python.keras import backend as K
 import tensorflow as tf
 
+import threading
+
 class MaxDamagePlayer(Player):
     def choose_move(self, battle):
         # If the player can attack, it will
@@ -102,9 +104,11 @@ class PokeAgent(TrainablePlayer):
     
     def state_to_action(self, state: np.array, battle: Battle):
         print("Antes do predict")
-        with self.graph.as_default():
-            with self.session.as_default():
-                actions = self.model.predict(state)
+        # with self.graph.as_default():
+        #     with self.session.as_default():
+        #         actions = self.model.predict(state)
+        while 1:
+            pass
         print("----------- ACTIONS HERE -----------")
         print(actions)
         pass
@@ -147,5 +151,24 @@ async def main():
     #     )
     # )
 
-if __name__ == "__main__":
+def startPSthread():
     asyncio.get_event_loop().run_until_complete(main())
+
+if __name__ == "__main__":
+    thread = threading.Thread(target=startPSthread)
+    thread.start()
+
+    input("Enter thing: ")
+
+    model = Sequential()
+    model = Sequential()
+    model.add(Dense(110, activation="relu", input_shape=(110,)))
+    model.add(Dense(110, activation="relu"))
+    model.add(Dense(9, activation="softmax"))
+    model._make_predict_function()
+    model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
+    
+    X = np.ones((110,))
+    actions = model.predict(X)
+
+    print(actions)
