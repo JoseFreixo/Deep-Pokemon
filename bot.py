@@ -161,7 +161,6 @@ if __name__ == "__main__":
     input("Enter thing: ")
 
     model = Sequential()
-    model = Sequential()
     model.add(Dense(110, activation="relu", input_shape=(110,)))
     model.add(Dense(110, activation="relu"))
     model.add(Dense(9, activation="softmax"))
