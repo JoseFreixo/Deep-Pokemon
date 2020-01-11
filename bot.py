@@ -21,7 +21,7 @@ from keras.optimizers import Adam
 from tensorflow.python.keras import backend as K
 import tensorflow as tf
 
-import threading
+from multiprocessing import Pool, Pipe
 
 class MaxDamagePlayer(Player):
     def choose_move(self, battle):
@@ -47,8 +47,12 @@ class PokeAgent(TrainablePlayer):
         model=None,
         server_configuration: ServerConfiguration,
         start_listening: bool = True,
+        conn=None,
     ) -> None:
-    
+        self.epsilon = 1
+        self.epsilon_decay = 99975
+        self.min_epsilon = 0.001
+        self.conn = conn
         config = tf.compat.v1.ConfigProto()
         config.gpu_options.allow_growth = True
         self.session = tf.compat.v1.Session(config=config)
@@ -71,24 +75,30 @@ class PokeAgent(TrainablePlayer):
 
     @staticmethod
     def init_model():
-        model = Sequential()
-        model.add(Dense(110, activation="relu", input_shape=(110,)))
-        model.add(Dense(110, activation="relu"))
-        model.add(Dense(9, activation="softmax"))
-        model._make_predict_function()
-        model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
-        
-        return model
+        pass
 
     def action_to_move(self, action, battle: Battle):
-        if battle.available_moves:
-            # Finds the best move among available ones
-            best_move = max(battle.available_moves, key=lambda move: move.base_power)
-            return self.create_order(best_move)
+        print("Gonna use move")
+        orders = []
+        for move in battle.available_moves:
+            print("Checking move: " + str(move))
+            if battle.can_mega_evolve:
+                orders.append(self.create_order(move, mega=True))
+            else:
+                orders.append(self.create_order(move))
 
-        # If no attack is available, a random switch will be made
-        else:
-            return self.choose_random_move(battle)
+        for key in battle.team:
+            print("Checking pokemon: " + str(battle.team[key]))
+            if battle.team[key].active:
+                continue
+            orders.append(self.create_order(battle.team[key]))
+        if not battle.available_moves:
+            action -= 4
+        if len(battle.available_moves) == 1 and not battle.available_switches:
+            action = 0
+        print("Chose: " + str(orders[action]))
+        return orders[action]
+
 
     def battle_to_state(self, battle: Battle):
         state = np.array([])
@@ -103,21 +113,49 @@ class PokeAgent(TrainablePlayer):
         return state
     
     def state_to_action(self, state: np.array, battle: Battle):
-        print("Antes do predict")
-        # with self.graph.as_default():
-        #     with self.session.as_default():
-        #         actions = self.model.predict(state)
-        while 1:
-            pass
+        self.conn.send(state)
+        actions = self.conn.recv()[0]
         print("----------- ACTIONS HERE -----------")
         print(actions)
-        pass
+        # print(actions.shape)
+        # actions = np.array(actions)
+        # actions = np.hstack(actions)
+        # print(actions)
+        # print(actions.shape)
+
+        # probs = actions.tolist()
+        # print(probs)
+        print("Choosing action")
+        action = 0
+        if self.epsilon < np.random.random():
+            rn = np.random.random()
+            act_sum = 0
+            for act in actions:
+                if rn <= act + act_sum:
+                    break
+                act_sum += act
+                action += 1
+        else:
+            action = np.random.randint(0, 9)
+
+        print("CHOSEN ACTION: " + str(action))
+        return action
+    
+    def is_action_valid(action, state, battle) -> bool:
+        if not battle.available_moves and action < 4:
+            return False
+        
+        fainted = (action - 2) * 7
+        if state[fainted] == 1:
+            return False
+
+        return True
 
     def replay(self, battle_history: Dict):
         # print(battle_history)
         pass
 
-async def main():
+async def main(future, child):
     start = time.time()
 
     # We define two player configurations.
@@ -129,6 +167,7 @@ async def main():
         player_configuration=player_1_configuration,
         battle_format="gen7letsgorandombattle",
         server_configuration=LocalhostServerConfiguration,
+        conn=child
     )
     random_player = RandomPlayer(
         player_configuration=player_2_configuration,
@@ -137,28 +176,26 @@ async def main():
     )
 
     await agent_player.train_against(random_player, 1)
+    print("Terminei")
+    future.set_result("I'm done!")
 
-    # Now, let's evaluate our player
-    # cross_evaluation = await cross_evaluate(
-    #     [agent_player, max_damage_player], n_challenges=1
-    # )
 
-    # print(
-    #     "Max damage player won %d / 100 battles [this took %f seconds]"
-    #     % (
-    #         cross_evaluation[max_damage_player.username][agent_player.username] * 1,
-    #         time.time() - start,
-    #     )
-    # )
 
-def startPSthread():
-    asyncio.get_event_loop().run_until_complete(main())
+def startPSthread(child):
+    loop = asyncio.get_event_loop()
+    future = asyncio.Future()
+    asyncio.ensure_future(main(future, child))
+    loop.run_until_complete(future)
+    loop.close()
+
+
 
 if __name__ == "__main__":
-    thread = threading.Thread(target=startPSthread)
-    thread.start()
+    
+    parent, child = Pipe()
 
-    input("Enter thing: ")
+    pool = Pool(processes=1)
+    result = pool.apply_async(startPSthread, (child,))
 
     model = Sequential()
     model.add(Dense(110, activation="relu", input_shape=(110,)))
@@ -166,8 +203,12 @@ if __name__ == "__main__":
     model.add(Dense(9, activation="softmax"))
     model._make_predict_function()
     model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
-    
-    X = np.ones((110,))
-    actions = model.predict(X)
 
-    print(actions)
+    while True:
+        state = parent.recv()
+        if state[0] == -1:
+            print("BREAKING BREAKING BREAKING BREAKING BREAKING BREAKING BREAKING")
+            break
+        actions = model.predict(np.array([state]))
+        parent.send(actions)
+        pass
