@@ -58,9 +58,24 @@ def getTeamFeatures(team: Dict, active_poke: Pokemon):
         state = np.append(state, [1, 0, 0, 0, 0, 0, 0])
     return state
 
-def getMovesInfo(own_poke: Pokemon, opp_poke: Pokemon):
+def getMovesInfo(own_poke: Pokemon, opp_poke: Pokemon, battle):
     state = np.array([])
     moves = own_poke.moves
+
+    for key in battle.team:
+        if own_poke == battle.team[key]:
+            new_moves = {}
+            for move in battle.available_moves:
+                for key2 in moves:
+                    if move == moves[key2]:
+                        new_moves[key2] = move
+                        break
+            moves = new_moves
+            break
+
+    if own_poke.species == "Ditto" and len(moves) > 4:
+        print(moves)
+        moves.pop('transform')
 
     for key in moves:
         if (moves[key].category.name == "PHYSICAL"):

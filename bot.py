@@ -78,17 +78,14 @@ class PokeAgent(TrainablePlayer):
         pass
 
     def action_to_move(self, action, battle: Battle):
-        print("Gonna use move")
         orders = []
         for move in battle.available_moves:
-            print("Checking move: " + str(move))
             if battle.can_mega_evolve:
                 orders.append(self.create_order(move, mega=True))
             else:
                 orders.append(self.create_order(move))
 
         for key in battle.team:
-            print("Checking pokemon: " + str(battle.team[key]))
             if battle.team[key].active:
                 continue
             orders.append(self.create_order(battle.team[key]))
@@ -96,6 +93,8 @@ class PokeAgent(TrainablePlayer):
             action -= 4
         if len(battle.available_moves) == 1 and not battle.available_switches:
             action = 0
+        if action >= len(orders):
+            action = np.random.randint(0, len(orders))
         print("Chose: " + str(orders[action]))
         return orders[action]
 
@@ -107,25 +106,14 @@ class PokeAgent(TrainablePlayer):
         # ----- Add opponent team info ----- #
         state = np.append(state, bu.getTeamFeatures(battle.opponent_team, battle.opponent_active_pokemon))
         # ----- Add own moves info ----- #
-        state = np.append(state, bu.getMovesInfo(battle.active_pokemon, battle.opponent_active_pokemon))
+        state = np.append(state, bu.getMovesInfo(battle.active_pokemon, battle.opponent_active_pokemon, battle))
         # ----- Add opponent moves info ----- #
-        state = np.append(state, bu.getMovesInfo(battle.opponent_active_pokemon, battle.active_pokemon))
+        state = np.append(state, bu.getMovesInfo(battle.opponent_active_pokemon, battle.active_pokemon, battle))
         return state
     
     def state_to_action(self, state: np.array, battle: Battle):
         self.conn.send(state)
         actions = self.conn.recv()[0]
-        print("----------- ACTIONS HERE -----------")
-        print(actions)
-        # print(actions.shape)
-        # actions = np.array(actions)
-        # actions = np.hstack(actions)
-        # print(actions)
-        # print(actions.shape)
-
-        # probs = actions.tolist()
-        # print(probs)
-        print("Choosing action")
         action = 0
         if self.epsilon < np.random.random():
             rn = np.random.random()
@@ -137,23 +125,20 @@ class PokeAgent(TrainablePlayer):
                 action += 1
         else:
             action = np.random.randint(0, 9)
-
-        print("CHOSEN ACTION: " + str(action))
         return action
-    
-    def is_action_valid(action, state, battle) -> bool:
-        if not battle.available_moves and action < 4:
-            return False
-        
-        fainted = (action - 2) * 7
-        if state[fainted] == 1:
-            return False
-
-        return True
 
     def replay(self, battle_history: Dict):
-        # print(battle_history)
-        pass
+        message = [-2]
+        for key in battle_history:
+            for turn in range(len(battle_history[key])):
+                if (turn + 1 == len(battle_history[key])):
+                    break
+                state = battle_history[key][turn][0]
+                action = battle_history[key][turn][1]
+                new_state = battle_history[key][turn + 1][0]
+                message.append([state, action, new_state])  
+        self.conn.send(message)
+        # ack = self.conn.recv()
 
 async def main(future, child):
     start = time.time()
@@ -174,10 +159,15 @@ async def main(future, child):
         battle_format="gen7letsgorandombattle",
         server_configuration=LocalhostServerConfiguration,
     )
-
-    await agent_player.train_against(random_player, 1)
+    epochs = 500
+    while epochs > 0:
+        await agent_player.train_against(random_player, 1)
+        epochs -=1
+        if agent_player.epsilon > agent_player.min_epsilon:
+            agent_player.epsilon = max(agent_player.epsilon * agent_player.epsilon_decay, agent_player.min_epsilon)
     print("Terminei")
     future.set_result("I'm done!")
+    agent_player.conn.send([-1])
 
 
 
@@ -206,9 +196,19 @@ if __name__ == "__main__":
 
     while True:
         state = parent.recv()
+        # All battles ended
         if state[0] == -1:
-            print("BREAKING BREAKING BREAKING BREAKING BREAKING BREAKING BREAKING")
+            print("BATTLES ARE OVER")
             break
+        # Onde battle ended, training the network
+        if state[0] == -2:
+            print("TRAINING TIME")
+            for turn in range(len(state)):
+                if turn == 0:
+                    continue
+                # print(state[turn])
+                # TOTO: Get reward and Fit network here
+            continue
         actions = model.predict(np.array([state]))
         parent.send(actions)
         pass
