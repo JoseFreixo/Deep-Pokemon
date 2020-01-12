@@ -2,6 +2,9 @@ import asyncio
 import time
 import battle_utils as bu
 
+import sys
+import os.path
+
 import numpy as np
 
 from poke_env.player.player import Player
@@ -14,7 +17,7 @@ from poke_env.server_configuration import LocalhostServerConfiguration, ServerCo
 
 from typing import Dict, Optional
 
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers import Dense, Activation
 from keras.optimizers import Adam
 
@@ -50,7 +53,7 @@ class PokeAgent(TrainablePlayer):
         conn=None,
     ) -> None:
         self.epsilon = 1
-        self.epsilon_decay = 99975
+        self.epsilon_decay = 0.99
         self.min_epsilon = 0.001
         self.conn = conn
         config = tf.compat.v1.ConfigProto()
@@ -95,7 +98,7 @@ class PokeAgent(TrainablePlayer):
             action = 0
         if action >= len(orders):
             action = np.random.randint(0, len(orders))
-        print("Chose: " + str(orders[action]))
+        # print("Chose: " + str(orders[action]))
         return orders[action]
 
 
@@ -140,8 +143,10 @@ class PokeAgent(TrainablePlayer):
         self.conn.send(message)
         # ack = self.conn.recv()
 
-async def main(future, child):
-    start = time.time()
+async def evaluating(future, child):
+    # We define two player configurations.
+    player_1_configuration = PlayerConfiguration("Agent player", None)
+    player_2_configuration = PlayerConfiguration("Random player", None)
 
     # We define two player configurations.
     player_1_configuration = PlayerConfiguration("Agent player", None)
@@ -159,22 +164,88 @@ async def main(future, child):
         battle_format="gen7letsgorandombattle",
         server_configuration=LocalhostServerConfiguration,
     )
-    epochs = 500
-    while epochs > 0:
+
+    cross_evaluation = await cross_evaluate(
+        [random_player, agent_player], n_challenges=100
+    )
+
+    print("Agent won {:2d} / 100 battles".format(int(cross_evaluation[agent_player.username][random_player.username] * 100)))
+    future.set_result("I'm done!")
+    agent_player.conn.send([-1])
+    
+async def training(future, child):
+
+    # We define two player configurations.
+    player_1_configuration = PlayerConfiguration("Agent player", None)
+    player_2_configuration = PlayerConfiguration("Random player", None)
+    
+    # We create the corresponding players.
+    agent_player = PokeAgent(
+        player_configuration=player_1_configuration,
+        battle_format="gen7letsgorandombattle",
+        server_configuration=LocalhostServerConfiguration,
+        conn=child
+    )
+    random_player = RandomPlayer(
+        player_configuration=player_2_configuration,
+        battle_format="gen7letsgorandombattle",
+        server_configuration=LocalhostServerConfiguration,
+    )
+    episodes = 500
+    while episodes > 0:
         await agent_player.train_against(random_player, 1)
-        epochs -=1
+        episodes -=1
         if agent_player.epsilon > agent_player.min_epsilon:
             agent_player.epsilon = max(agent_player.epsilon * agent_player.epsilon_decay, agent_player.min_epsilon)
+        if (500 - episodes == 1 or 500 - episodes == 100 or 500 - episodes == 200 
+                or 500 - episodes == 300 or 500 - episodes == 400 or 500 - episodes == 500):
+            print("Fiz " + str(500 - episodes) + " batalhas - SAVING MODEL")
+            agent_player.conn.send([-3, 500 - episodes])
     print("Terminei")
     future.set_result("I'm done!")
     agent_player.conn.send([-1])
 
+def get_alive_own_pokemon(state):
+    n_alive = 0
+    if state[0] > 0:
+        n_alive += 1
+    for i in range(5):
+        if state[8 + 7 * i] > 0:
+            n_alive += 1
+    return n_alive
+
+def get_alive_opp_pokemon(state):
+    n_alive = 0
+    if state[43] > 0:
+        n_alive += 1
+    for i in range(5):
+        if state[51 + 7 * i] > 0:
+            n_alive += 1
+    return n_alive
+
+def damage_taken(state, new_state):
+    return state[0] - new_state[0]
+
+def damage_dealt(state, new_state):
+    return state[43] - new_state[43]
+
+def get_reward(state, new_state):
+    if np.array_equal(state, new_state):
+        return -0.1
+    own_lost_poke = get_alive_own_pokemon(state) - get_alive_own_pokemon(new_state)
+    opp_lost_poke = get_alive_opp_pokemon(state) - get_alive_opp_pokemon(new_state)
+    print("Reward is " + str(opp_lost_poke - own_lost_poke + damage_dealt(state, new_state) - damage_taken(state, new_state)))
+    return opp_lost_poke - own_lost_poke + damage_dealt(state, new_state) - damage_taken(state, new_state)
 
 
-def startPSthread(child):
+
+def startPSthread(child, mode):
     loop = asyncio.get_event_loop()
     future = asyncio.Future()
-    asyncio.ensure_future(main(future, child))
+    if mode == "train":
+        asyncio.ensure_future(training(future, child))
+    else:
+        asyncio.ensure_future(evaluating(future, child))
     loop.run_until_complete(future)
     loop.close()
 
@@ -182,33 +253,96 @@ def startPSthread(child):
 
 if __name__ == "__main__":
     
+    if len(sys.argv) < 2:
+        print('Wrong arguments: Usage is python <script path> <mode> [model path]')
+        print('Mode is either \"train\" or \"evaluate\"')
+        print('If mode is \"evaluate\": \"model path\" is required')
+        sys.exit()
+
+    if sys.argv[1] != "train" and sys.argv[1] != "evaluate":
+        print('Wrong mode: Usage is python <script path> <mode> [model path]')
+        print('Mode is either \"train\" or \"evaluate\"')
+        print('If mode is \"evaluate\": \"model path\" is required')
+        sys.exit()
+
+    if sys.argv[1] == "evaluate" and len(sys.argv) != 3:
+        print('No model specified: Usage is python <script path> <mode> [model path]')
+        print('Mode is either \"train\" or \"evaluate\"')
+        print('If mode is \"evaluate\": \"model path\" is required')
+        sys.exit()
+
+    gamma = 0.95
+    
     parent, child = Pipe()
 
     pool = Pool(processes=1)
-    result = pool.apply_async(startPSthread, (child,))
+    result = pool.apply_async(startPSthread, (child, sys.argv[1],))
 
-    model = Sequential()
-    model.add(Dense(110, activation="relu", input_shape=(110,)))
-    model.add(Dense(110, activation="relu"))
-    model.add(Dense(9, activation="softmax"))
-    model._make_predict_function()
-    model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
+    if sys.argv[1] == "train":
+        model = Sequential()
+        model.add(Dense(110, activation="relu", input_shape=(110,)))
+        model.add(Dense(110, activation="relu"))
+        model.add(Dense(9, activation="softmax"))
+        model._make_predict_function()
+        model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
+    else:
+        if os.path.isfile(sys.argv[2]):
+            model = load_model(sys.argv[2])
+        else:
+            print('Wrong model path: Usage is python <script path> <mode> [model path]')
+            print('Mode is either \"train\" or \"evaluate\"')
+            print('If mode is \"evaluate\": \"model path\" is required')
+            sys.exit()
 
     while True:
         state = parent.recv()
+        
         # All battles ended
         if state[0] == -1:
             print("BATTLES ARE OVER")
             break
+
+        if state[0] == -3:
+            model.save("models\\model{:03d}.h5".format(state[1]))
+            continue
+        
         # Onde battle ended, training the network
         if state[0] == -2:
             print("TRAINING TIME")
+            state.pop(0)
+
+            current_states = np.array([transition[0] for transition in state])
+            current_qs_list = model.predict(current_states)
+
+            new_current_states = np.array([transition[2] for transition in state])
+            future_qs_list = model.predict(new_current_states)
+            
+            X = []
+            y = []
+            
             for turn in range(len(state)):
-                if turn == 0:
-                    continue
                 # print(state[turn])
-                # TOTO: Get reward and Fit network here
+                curr_state = state[turn][0]
+                action = state[turn][1]
+                new_state = state[turn][2]
+                reward = get_reward(curr_state, new_state)
+                
+                # TOTO: Fit network here
+                if turn == len(state) - 1:
+                    new_q = reward
+                else:
+                    max_future_q = np.max(future_qs_list[turn])
+                    new_q = reward + gamma * max_future_q
+
+                current_qs = current_qs_list[turn]
+                current_qs[action] = new_q
+
+                X.append(curr_state)
+                y.append(current_qs)
+            print("***---___---*** FITTING TIME ***---___---***")
+            model.fit(np.array(X), np.array(y), verbose=1)
             continue
+        
         actions = model.predict(np.array([state]))
         parent.send(actions)
         pass
