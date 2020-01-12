@@ -1,6 +1,7 @@
 from poke_env.environment.pokemon import Pokemon
 from poke_env.environment.battle import Battle
 from poke_env.environment.effect import Effect
+from poke_env.environment.pokemon_type import PokemonType
 
 import numpy as np
 
@@ -34,12 +35,22 @@ def getPokemonFainted(pokemon: Pokemon):
         return [1]
     return [0]
 
+def get_stat_multiplier(poke, stat): # TODO: TEST THIS
+    value = poke._boosts.get(stat)
+    if value < -1:
+        return -1 / value
+    if value > 0:
+        return 1 + 0.5 * value
+    if value == -1:
+        return 0.67
+    return 1
+
 def getTeamFeatures(team: Dict, active_poke: Pokemon):
     state = np.array([])
 
     level = active_poke.level
     # hp, atk, def, spa, spd, spe
-    speed = active_poke.base_stats.get("spe")
+    speed = active_poke.base_stats.get("spe")# * active_poke.boosts.get("spe")
     # speed = ((2 * speed + 31) * level / 100 + 5) * 1.1 * 1.1 + 200
     state = np.append(state, [active_poke.current_hp_fraction])
     state = np.append(state, [speed])
@@ -58,6 +69,12 @@ def getTeamFeatures(team: Dict, active_poke: Pokemon):
         state = np.append(state, [1, 0, 0, 0, 0, 0, 0])
     return state
 
+def get_type_multiplier(move_type: PokemonType, pokemon: Pokemon):
+    if pokemon.type_2:
+        return move_type.damage_multiplier(pokemon.type_1, pokemon.type_2)
+    else:
+        return move_type.damage_multiplier(pokemon.type_1)
+
 def getMovesInfo(own_poke: Pokemon, opp_poke: Pokemon, battle):
     state = np.array([])
     moves = own_poke.moves
@@ -74,19 +91,21 @@ def getMovesInfo(own_poke: Pokemon, opp_poke: Pokemon, battle):
             break
 
     if own_poke.species == "Ditto" and len(moves) > 4:
-        print(moves)
         moves.pop('transform')
 
     for key in moves:
+        damage_mult = get_type_multiplier(moves[key].type, opp_poke)
         if (moves[key].category.name == "PHYSICAL"):
-            power = moves[key].base_power * own_poke.base_stats.get("atk") * moves[key].accuracy / opp_poke.base_stats.get("def")
+            # print("Effectiveness: " + str(damage_mult))            
+            power = damage_mult * moves[key].base_power * own_poke.base_stats.get("atk") * moves[key].accuracy / opp_poke.base_stats.get("def")
             secondary = 0.0
             if (moves[key].secondary != None):
                 secondary = moves[key].secondary.get("chance") / 100
             state = np.append(state, [power, secondary, moves[key].priority])
         
         elif (moves[key].category.name == "SPECIAL"):
-            power = moves[key].base_power * own_poke.base_stats.get("spa") * moves[key].accuracy / opp_poke.base_stats.get("spd")
+            # print("Effectiveness: " + str(damage_mult))     
+            power = damage_mult * moves[key].base_power * own_poke.base_stats.get("spa") * moves[key].accuracy / opp_poke.base_stats.get("spd")
             secondary = 0.0
             if (moves[key].secondary != None):
                 secondary = moves[key].secondary.get("chance") / 100

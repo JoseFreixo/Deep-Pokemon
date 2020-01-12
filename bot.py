@@ -51,7 +51,9 @@ class PokeAgent(TrainablePlayer):
         server_configuration: ServerConfiguration,
         start_listening: bool = True,
         conn=None,
+        train=True
     ) -> None:
+        self.train = train
         self.epsilon = 1
         self.epsilon_decay = 0.99
         self.min_epsilon = 0.001
@@ -118,16 +120,29 @@ class PokeAgent(TrainablePlayer):
         self.conn.send(state)
         actions = self.conn.recv()[0]
         action = 0
-        if self.epsilon < np.random.random():
-            rn = np.random.random()
-            act_sum = 0
-            for act in actions:
-                if rn <= act + act_sum:
-                    break
-                act_sum += act
-                action += 1
+        if self.train:
+            if self.epsilon < np.random.random():
+                rn = np.random.random()
+                act_sum = 0
+                for act in actions:
+                    if rn <= act + act_sum:
+                        break
+                    act_sum += act
+                    action += 1
+            else:
+                action = np.random.randint(0, 9)
         else:
-            action = np.random.randint(0, 9)
+            if np.random.random() > 0.05:
+                rn = np.random.random()
+                act_sum = 0
+                for act in actions:
+                    if rn <= act + act_sum:
+                        break
+                    act_sum += act
+                    action += 1
+            else:
+                action = np.random.randint(0, 9)
+
         return action
 
     def replay(self, battle_history: Dict):
@@ -147,17 +162,14 @@ async def evaluating(future, child):
     # We define two player configurations.
     player_1_configuration = PlayerConfiguration("Agent player", None)
     player_2_configuration = PlayerConfiguration("Random player", None)
-
-    # We define two player configurations.
-    player_1_configuration = PlayerConfiguration("Agent player", None)
-    player_2_configuration = PlayerConfiguration("Random player", None)
     
     # We create the corresponding players.
     agent_player = PokeAgent(
         player_configuration=player_1_configuration,
         battle_format="gen7letsgorandombattle",
         server_configuration=LocalhostServerConfiguration,
-        conn=child
+        conn=child,
+        train=False
     )
     random_player = RandomPlayer(
         player_configuration=player_2_configuration,
@@ -165,11 +177,17 @@ async def evaluating(future, child):
         server_configuration=LocalhostServerConfiguration,
     )
 
-    cross_evaluation = await cross_evaluate(
-        [random_player, agent_player], n_challenges=100
-    )
+    n_battles = 500
+    won_battles = 0
+    while n_battles > 0:
+        cross_evaluation = await cross_evaluate(
+            [agent_player, random_player], n_challenges=1
+        )
+        n_battles -= 1
+        won_battles += cross_evaluation[agent_player.username][random_player.username]
 
-    print("Agent won {:2d} / 100 battles".format(int(cross_evaluation[agent_player.username][random_player.username] * 100)))
+
+    print("Agent won {} / 500 battles".format(won_battles))
     future.set_result("I'm done!")
     agent_player.conn.send([-1])
     
@@ -231,11 +249,11 @@ def damage_dealt(state, new_state):
 
 def get_reward(state, new_state):
     if np.array_equal(state, new_state):
-        return -0.1
+        print("SAME STATE")
+        return -0.5
     own_lost_poke = get_alive_own_pokemon(state) - get_alive_own_pokemon(new_state)
     opp_lost_poke = get_alive_opp_pokemon(state) - get_alive_opp_pokemon(new_state)
-    print("Reward is " + str(opp_lost_poke - own_lost_poke + damage_dealt(state, new_state) - damage_taken(state, new_state)))
-    return opp_lost_poke - own_lost_poke + damage_dealt(state, new_state) - damage_taken(state, new_state)
+    return (opp_lost_poke - own_lost_poke + damage_dealt(state, new_state) - damage_taken(state, new_state)) # * 10
 
 
 
@@ -339,10 +357,9 @@ if __name__ == "__main__":
 
                 X.append(curr_state)
                 y.append(current_qs)
-            print("***---___---*** FITTING TIME ***---___---***")
+
             model.fit(np.array(X), np.array(y), verbose=1)
             continue
         
         actions = model.predict(np.array([state]))
         parent.send(actions)
-        pass
