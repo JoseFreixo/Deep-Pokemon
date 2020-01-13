@@ -45,7 +45,7 @@ class AggressivePlayer(Player):
             if len(battle.available_switches) == 0 or move_value > best_value:
                 # No switches available
                 # print("MDP: Chose: " + self.create_order(best_move))
-                return self.create_order(best_move)
+                return self.create_order(best_move, mega=battle.can_mega_evolve)
         
         # print("MDP: Chose: " + self.create_order(battle.available_switches[poke_id]))
         return self.create_order(battle.available_switches[poke_id])
@@ -83,16 +83,16 @@ class AggressivePlayer(Player):
         # See if it is able to setup
         if best_boost > 0:
             # print("MDP: Chose: " + self.create_order(moves[move_id]))
-            return self.create_order(moves[move_id])
+            return self.create_order(moves[move_id], mega=battle.can_mega_evolve)
         # See if it has a good enough move
         if default_damage > 90:
             # print("MDP: Chose: " + self.create_order(default_move))
-            return self.create_order(default_move)
+            return self.create_order(default_move, mega=battle.can_mega_evolve)
         # See if it has a switch move
         switch_moves = self.get_switch_moves(battle, moves)
         if len(switch_moves) > 0:
             # print("MDP: Chose: "+ self.create_order(switch_moves[0]))
-            return self.create_order(switch_moves[0])
+            return self.create_order(switch_moves[0], mega=battle.can_mega_evolve)
         # Switch
         return self.choose_best_safe_switch(battle)
 
@@ -111,13 +111,13 @@ class AggressivePlayer(Player):
             # See if it has a good enough move
             if move_damage > 90:
                 # print("MDP: Chose: " + self.create_order(best_move))
-                return self.create_order(best_move)
+                return self.create_order(best_move, mega=battle.can_mega_evolve)
 
             # See if it has a switch move
             switch_moves = self.get_switch_moves(battle, battle.available_moves)
             if len(switch_moves) > 0:
                 # print("MDP: Chose: "+ self.create_order(switch_moves[0]))
-                return self.create_order(switch_moves[0])
+                return self.create_order(switch_moves[0], mega=battle.can_mega_evolve)
 
             # Switch
             return self.choose_best_safe_switch(battle)
@@ -315,16 +315,17 @@ async def training(future, child, opponent):
             server_configuration=LocalhostServerConfiguration,
         )
 
-    episodes = 500
+    episodes = 800
     while episodes > 0:
         await agent_player.train_against(enemy_player, 1)
         episodes -=1
         if agent_player.epsilon > agent_player.min_epsilon:
             agent_player.epsilon = max(agent_player.epsilon * agent_player.epsilon_decay, agent_player.min_epsilon)
-        if (500 - episodes == 1 or 500 - episodes == 100 or 500 - episodes == 200 
-                or 500 - episodes == 300 or 500 - episodes == 400 or 500 - episodes == 500):
-            print("Fiz " + str(500 - episodes) + " batalhas - SAVING MODEL")
-            agent_player.conn.send([-3, 500 - episodes])
+        if (800 - episodes == 1 or 800 - episodes == 100 or 800 - episodes == 200 
+                or 800 - episodes == 300 or 800 - episodes == 400 or 800 - episodes == 500
+                or 800 - episodes == 600 or 800 - episodes == 700 or 800 - episodes == 800):
+            print("Fiz " + str(800 - episodes) + " batalhas - SAVING MODEL")
+            agent_player.conn.send([-3, 800 - episodes])
     print("Terminei")
     future.set_result("I'm done!")
     agent_player.conn.send([-1])
