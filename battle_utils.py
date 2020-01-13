@@ -37,20 +37,17 @@ def getPokemonFainted(pokemon: Pokemon):
 
 def get_stat_multiplier(poke, stat): # TODO: TEST THIS
     value = poke._boosts.get(stat)
-    if value < -1:
-        return -1 / value
-    if value > 0:
+    if value < 0:
+        return 1 / (1 + 0.5 * -value)
+    else: # value >= 0:
         return 1 + 0.5 * value
-    if value == -1:
-        return 0.67
-    return 1
 
 def getTeamFeatures(team: Dict, active_poke: Pokemon):
     state = np.array([])
 
     level = active_poke.level
     # hp, atk, def, spa, spd, spe
-    speed = active_poke.base_stats.get("spe")# * active_poke.boosts.get("spe")
+    speed = active_poke.base_stats.get("spe") * get_stat_multiplier(active_poke, "spe")
     # speed = ((2 * speed + 31) * level / 100 + 5) * 1.1 * 1.1 + 200
     state = np.append(state, [active_poke.current_hp_fraction])
     state = np.append(state, [speed])
@@ -97,7 +94,8 @@ def getMovesInfo(own_poke: Pokemon, opp_poke: Pokemon, battle):
         damage_mult = get_type_multiplier(moves[key].type, opp_poke)
         if (moves[key].category.name == "PHYSICAL"):
             # print("Effectiveness: " + str(damage_mult))            
-            power = damage_mult * moves[key].base_power * own_poke.base_stats.get("atk") * moves[key].accuracy / opp_poke.base_stats.get("def")
+            power = (damage_mult * moves[key].base_power * own_poke.base_stats.get("atk") * get_stat_multiplier(own_poke, "atk")
+                * moves[key].accuracy / (opp_poke.base_stats.get("def") * get_stat_multiplier(own_poke, "def")))
             secondary = 0.0
             if (moves[key].secondary != None):
                 secondary = moves[key].secondary.get("chance") / 100
@@ -105,7 +103,8 @@ def getMovesInfo(own_poke: Pokemon, opp_poke: Pokemon, battle):
         
         elif (moves[key].category.name == "SPECIAL"):
             # print("Effectiveness: " + str(damage_mult))     
-            power = damage_mult * moves[key].base_power * own_poke.base_stats.get("spa") * moves[key].accuracy / opp_poke.base_stats.get("spd")
+            power = (damage_mult * moves[key].base_power * own_poke.base_stats.get("spa") * get_stat_multiplier(own_poke, "spa")
+                * moves[key].accuracy / (opp_poke.base_stats.get("spd") * get_stat_multiplier(own_poke, "spd")))
             secondary = 0.0
             if (moves[key].secondary != None):
                 secondary = moves[key].secondary.get("chance") / 100

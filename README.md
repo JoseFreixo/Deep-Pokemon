@@ -25,6 +25,14 @@ node pokemon-showdown
 This requires Node.js v10+
 
 ### Run Deep Pokemon
+For training, run:
 ```
-python bot.py
+python deep_pokemon.py train <opponent>
 ```
+
+For evaluating, run:
+```
+python deep_pokemon.py evaluate <opponent> <model_path>
+```
+
+Opponent should be either 'random' or 'aggressive'

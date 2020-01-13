@@ -26,17 +26,106 @@ import tensorflow as tf
 
 from multiprocessing import Pool, Pipe
 
-class MaxDamagePlayer(Player):
+class AggressivePlayer(Player):
+
+    def choose_best_safe_switch(self, battle):
+        poke_id = 0
+        best_value = 0
+        for i in range(len(battle.available_switches)):
+            moves = self.dict_moves_to_list(battle.available_switches[i].moves)
+            best_move = max(moves, key=lambda move: move.base_power * bu.get_type_multiplier(move.type, battle.opponent_active_pokemon))
+            move_value = best_move.base_power * bu.get_type_multiplier(best_move.type, battle.opponent_active_pokemon)
+            if move_value > best_value:
+                best_value = move_value
+                poke_id = i
+        
+        if battle.available_moves:
+            best_move = max(battle.available_moves, key=lambda move: move.base_power * bu.get_type_multiplier(move.type, battle.opponent_active_pokemon))
+            move_value = best_move.base_power * bu.get_type_multiplier(best_move.type, battle.opponent_active_pokemon)
+            if len(battle.available_switches) == 0 or move_value > best_value:
+                # No switches available
+                # print("MDP: Chose: " + self.create_order(best_move))
+                return self.create_order(best_move)
+        
+        # print("MDP: Chose: " + self.create_order(battle.available_switches[poke_id]))
+        return self.create_order(battle.available_switches[poke_id])
+
+    def get_switch_moves(self, battle, moves):
+        switch_moves = []
+        for move in moves:
+            if move.self_switch:
+                switch_moves.append(move)
+        
+        if len(switch_moves) > 0:
+            switch_moves.sort(reverse=True, key=lambda mov: mov.base_power * bu.get_type_multiplier(mov.type, battle.opponent_active_pokemon))
+            if bu.get_type_multiplier(switch_moves[0].type, battle.opponent_active_pokemon) == 0:
+                return []
+
+        return switch_moves
+
+    def dict_moves_to_list(self, dictionary):
+        arr = []
+        if dictionary == None:
+            return arr
+        for key in dictionary:
+            arr.append(dictionary[key])
+        return arr
+
+    def use_setup_move(self, battle, default_move, default_damage):
+        moves = battle.available_moves
+        best_boost = 0
+        move_id = 0
+        for i in range(len(moves)):
+            boost = sum(self.dict_moves_to_list(moves[i].self_boost))
+            if boost > best_boost:
+                best_boost = boost
+                move_id = i
+        # See if it is able to setup
+        if best_boost > 0:
+            # print("MDP: Chose: " + self.create_order(moves[move_id]))
+            return self.create_order(moves[move_id])
+        # See if it has a good enough move
+        if default_damage > 90:
+            # print("MDP: Chose: " + self.create_order(default_move))
+            return self.create_order(default_move)
+        # See if it has a switch move
+        switch_moves = self.get_switch_moves(battle, moves)
+        if len(switch_moves) > 0:
+            # print("MDP: Chose: "+ self.create_order(switch_moves[0]))
+            return self.create_order(switch_moves[0])
+        # Switch
+        return self.choose_best_safe_switch(battle)
+
+
     def choose_move(self, battle):
         # If the player can attack, it will
         if battle.available_moves:
             # Finds the best move among available ones
-            best_move = max(battle.available_moves, key=lambda move: move.base_power)
-            return self.create_order(best_move)
+            best_move = max(battle.available_moves, key=lambda move: move.base_power * bu.get_type_multiplier(move.type, battle.opponent_active_pokemon))
+            move_damage = best_move.base_power * bu.get_type_multiplier(best_move.type, battle.opponent_active_pokemon)
 
-        # If no attack is available, a random switch will be made
+            # See if it is able to setup
+            if battle.active_pokemon.current_hp_fraction >= 0.74:
+                return self.use_setup_move(battle, best_move, move_damage)
+
+            # See if it has a good enough move
+            if move_damage > 90:
+                # print("MDP: Chose: " + self.create_order(best_move))
+                return self.create_order(best_move)
+
+            # See if it has a switch move
+            switch_moves = self.get_switch_moves(battle, battle.available_moves)
+            if len(switch_moves) > 0:
+                # print("MDP: Chose: "+ self.create_order(switch_moves[0]))
+                return self.create_order(switch_moves[0])
+
+            # Switch
+            return self.choose_best_safe_switch(battle)
+
+
+        # If no attack is available, the "best safe" switch will be made
         else:
-            return self.choose_random_move(battle)
+            return self.choose_best_safe_switch(battle)
 
 class PokeAgent(TrainablePlayer):
     def __init__(
@@ -158,10 +247,12 @@ class PokeAgent(TrainablePlayer):
         self.conn.send(message)
         # ack = self.conn.recv()
 
-async def evaluating(future, child):
+##########################################################################
+
+async def evaluating(future, child, opponent):
     # We define two player configurations.
     player_1_configuration = PlayerConfiguration("Agent player", None)
-    player_2_configuration = PlayerConfiguration("Random player", None)
+    player_2_configuration = PlayerConfiguration("Enemy player", None)
     
     # We create the corresponding players.
     agent_player = PokeAgent(
@@ -171,31 +262,38 @@ async def evaluating(future, child):
         conn=child,
         train=False
     )
-    random_player = RandomPlayer(
-        player_configuration=player_2_configuration,
-        battle_format="gen7letsgorandombattle",
-        server_configuration=LocalhostServerConfiguration,
-    )
+    if opponent == "random":
+        enemy_player = RandomPlayer(
+            player_configuration=player_2_configuration,
+            battle_format="gen7letsgorandombattle",
+            server_configuration=LocalhostServerConfiguration,
+        )
+    else:
+        enemy_player = AggressivePlayer(
+            player_configuration=player_2_configuration,
+            battle_format="gen7letsgorandombattle",
+            server_configuration=LocalhostServerConfiguration,
+        )
 
-    n_battles = 500
+    n_battles = 100
     won_battles = 0
     while n_battles > 0:
         cross_evaluation = await cross_evaluate(
-            [agent_player, random_player], n_challenges=1
+            [agent_player, enemy_player], n_challenges=1
         )
         n_battles -= 1
-        won_battles += cross_evaluation[agent_player.username][random_player.username]
+        won_battles += cross_evaluation[agent_player.username][enemy_player.username]
 
 
-    print("Agent won {} / 500 battles".format(won_battles))
+    print("Agent won {} / 100 battles".format(won_battles))
     future.set_result("I'm done!")
     agent_player.conn.send([-1])
     
-async def training(future, child):
+async def training(future, child, opponent):
 
     # We define two player configurations.
     player_1_configuration = PlayerConfiguration("Agent player", None)
-    player_2_configuration = PlayerConfiguration("Random player", None)
+    player_2_configuration = PlayerConfiguration("Enemy player", None)
     
     # We create the corresponding players.
     agent_player = PokeAgent(
@@ -204,14 +302,22 @@ async def training(future, child):
         server_configuration=LocalhostServerConfiguration,
         conn=child
     )
-    random_player = RandomPlayer(
-        player_configuration=player_2_configuration,
-        battle_format="gen7letsgorandombattle",
-        server_configuration=LocalhostServerConfiguration,
-    )
+    if opponent == "random":
+        enemy_player = RandomPlayer(
+            player_configuration=player_2_configuration,
+            battle_format="gen7letsgorandombattle",
+            server_configuration=LocalhostServerConfiguration,
+        )
+    else:
+        enemy_player = AggressivePlayer(
+            player_configuration=player_2_configuration,
+            battle_format="gen7letsgorandombattle",
+            server_configuration=LocalhostServerConfiguration,
+        )
+
     episodes = 500
     while episodes > 0:
-        await agent_player.train_against(random_player, 1)
+        await agent_player.train_against(enemy_player, 1)
         episodes -=1
         if agent_player.epsilon > agent_player.min_epsilon:
             agent_player.epsilon = max(agent_player.epsilon * agent_player.epsilon_decay, agent_player.min_epsilon)
@@ -250,67 +356,67 @@ def damage_dealt(state, new_state):
 def get_reward(state, new_state):
     if np.array_equal(state, new_state):
         print("SAME STATE")
-        return -0.5
+        return -1
     own_lost_poke = get_alive_own_pokemon(state) - get_alive_own_pokemon(new_state)
-    opp_lost_poke = get_alive_opp_pokemon(state) - get_alive_opp_pokemon(new_state)
-    return (opp_lost_poke - own_lost_poke + damage_dealt(state, new_state) - damage_taken(state, new_state)) # * 10
+    opp_lost_poke = (get_alive_opp_pokemon(state) - get_alive_opp_pokemon(new_state)) * 1.5
+    return (opp_lost_poke - own_lost_poke + damage_dealt(state, new_state) * 1.5 - damage_taken(state, new_state)) # * 10
 
 
 
-def startPSthread(child, mode):
+def startPSthread(child, mode, opponent):
     loop = asyncio.get_event_loop()
     future = asyncio.Future()
     if mode == "train":
-        asyncio.ensure_future(training(future, child))
+        asyncio.ensure_future(training(future, child, opponent))
     else:
-        asyncio.ensure_future(evaluating(future, child))
+        asyncio.ensure_future(evaluating(future, child, opponent))
     loop.run_until_complete(future)
     loop.close()
+
+def arguments_error(reason):
+    print(reason + ': Usage is python <script path> <mode> <opponent> [model path]')
+    print('Mode is either \"train\" or \"evaluate\"')
+    print('Opponent is either \"random\" or \"aggressive\"')
+    print('If mode is \"evaluate\": \"model path\" is required')
+    sys.exit()
 
 
 
 if __name__ == "__main__":
     
-    if len(sys.argv) < 2:
-        print('Wrong arguments: Usage is python <script path> <mode> [model path]')
-        print('Mode is either \"train\" or \"evaluate\"')
-        print('If mode is \"evaluate\": \"model path\" is required')
-        sys.exit()
+    if len(sys.argv) < 3:
+        arguments_error("Wrong arguments")
 
     if sys.argv[1] != "train" and sys.argv[1] != "evaluate":
-        print('Wrong mode: Usage is python <script path> <mode> [model path]')
-        print('Mode is either \"train\" or \"evaluate\"')
-        print('If mode is \"evaluate\": \"model path\" is required')
-        sys.exit()
+        arguments_error("Wrong mode")
 
-    if sys.argv[1] == "evaluate" and len(sys.argv) != 3:
-        print('No model specified: Usage is python <script path> <mode> [model path]')
-        print('Mode is either \"train\" or \"evaluate\"')
-        print('If mode is \"evaluate\": \"model path\" is required')
-        sys.exit()
+    if sys.argv[1] == "evaluate" and len(sys.argv) != 4:
+        arguments_error("No model specified")
+
+    if sys.argv[2] != "random" and sys.argv[2] != "aggressive":
+        arguments_error("Wrong opponent")
 
     gamma = 0.95
     
     parent, child = Pipe()
 
     pool = Pool(processes=1)
-    result = pool.apply_async(startPSthread, (child, sys.argv[1],))
+    result = pool.apply_async(startPSthread, (child, sys.argv[1], sys.argv[2],))
 
-    if sys.argv[1] == "train":
+    if sys.argv[1] == "train" and len(sys.argv) < 4:
         model = Sequential()
-        model.add(Dense(110, activation="relu", input_shape=(110,)))
-        model.add(Dense(110, activation="relu"))
+        model.add(Dense(50, activation="elu", input_shape=(110,)))
+        model.add(Dense(50, activation="elu"))
+        model.add(Dense(25, activation="elu"))
+        model.add(Dense(25, activation="elu"))
         model.add(Dense(9, activation="softmax"))
         model._make_predict_function()
-        model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
+        model.compile(loss="categorical_crossentropy", optimizer="rmsprop", metrics=["accuracy"])
     else:
-        if os.path.isfile(sys.argv[2]):
-            model = load_model(sys.argv[2])
+        if os.path.isfile(sys.argv[3]):
+            model = load_model(sys.argv[3])
         else:
-            print('Wrong model path: Usage is python <script path> <mode> [model path]')
-            print('Mode is either \"train\" or \"evaluate\"')
-            print('If mode is \"evaluate\": \"model path\" is required')
-            sys.exit()
+            arguments_error("Wrong model path")
 
     while True:
         state = parent.recv()
@@ -321,7 +427,10 @@ if __name__ == "__main__":
             break
 
         if state[0] == -3:
-            model.save("models\\model{:03d}.h5".format(state[1]))
+            if sys.argv[2] == "random":
+                model.save("models\\model{:03d}.h5".format(state[1]))
+            else:
+                model.save("models\\model{:03d}_agg.h5".format(state[1]))
             continue
         
         # Onde battle ended, training the network
