@@ -1,6 +1,7 @@
 import asyncio
 import time
 import battle_utils as bu
+import deep_q_utils as dqu
 
 import sys
 import os.path
@@ -26,6 +27,11 @@ import tensorflow as tf
 
 from multiprocessing import Pool, Pipe
 
+##########################################################################
+#                                                                        #
+#                      AGRESSIVE PLAYER HEURISTIC                        #
+#                                                                        #
+##########################################################################
 class AggressivePlayer(Player):
 
     def choose_best_safe_switch(self, battle):
@@ -127,6 +133,11 @@ class AggressivePlayer(Player):
         else:
             return self.choose_best_safe_switch(battle)
 
+##########################################################################
+#                                                                        #
+#                              DEEP-Q AGENT                              #
+#                                                                        #
+##########################################################################
 class PokeAgent(TrainablePlayer):
     def __init__(
         self,
@@ -248,7 +259,10 @@ class PokeAgent(TrainablePlayer):
         # ack = self.conn.recv()
 
 ##########################################################################
-
+#                                                                        #
+#                           EVALUATION METHOD                            #
+#                                                                        #
+##########################################################################
 async def evaluating(future, child, opponent):
     # We define two player configurations.
     player_1_configuration = PlayerConfiguration("Agent player", None)
@@ -289,6 +303,11 @@ async def evaluating(future, child, opponent):
     future.set_result("I'm done!")
     agent_player.conn.send([-1])
     
+##########################################################################
+#                                                                        #
+#                            TRAINING METHOD                             #
+#                                                                        #
+##########################################################################
 async def training(future, child, opponent):
 
     # We define two player configurations.
@@ -330,40 +349,6 @@ async def training(future, child, opponent):
     future.set_result("I'm done!")
     agent_player.conn.send([-1])
 
-def get_alive_own_pokemon(state):
-    n_alive = 0
-    if state[0] > 0:
-        n_alive += 1
-    for i in range(5):
-        if state[8 + 7 * i] > 0:
-            n_alive += 1
-    return n_alive
-
-def get_alive_opp_pokemon(state):
-    n_alive = 0
-    if state[43] > 0:
-        n_alive += 1
-    for i in range(5):
-        if state[51 + 7 * i] > 0:
-            n_alive += 1
-    return n_alive
-
-def damage_taken(state, new_state):
-    return state[0] - new_state[0]
-
-def damage_dealt(state, new_state):
-    return state[43] - new_state[43]
-
-def get_reward(state, new_state):
-    if np.array_equal(state, new_state):
-        print("SAME STATE")
-        return -1
-    own_lost_poke = get_alive_own_pokemon(state) - get_alive_own_pokemon(new_state)
-    opp_lost_poke = (get_alive_opp_pokemon(state) - get_alive_opp_pokemon(new_state)) * 1.5
-    return (opp_lost_poke - own_lost_poke + damage_dealt(state, new_state) * 1.5 - damage_taken(state, new_state)) # * 10
-
-
-
 def startPSthread(child, mode, opponent):
     loop = asyncio.get_event_loop()
     future = asyncio.Future()
@@ -374,14 +359,18 @@ def startPSthread(child, mode, opponent):
     loop.run_until_complete(future)
     loop.close()
 
+##########################################################################
+#                                                                        #
+#                         MODEL-HOLDING PROCESS                          #
+#                                                                        #
+##########################################################################
+
 def arguments_error(reason):
     print(reason + ': Usage is python <script path> <mode> <opponent> [model path]')
     print('Mode is either \"train\" or \"evaluate\"')
     print('Opponent is either \"random\" or \"aggressive\"')
     print('If mode is \"evaluate\": \"model path\" is required')
     sys.exit()
-
-
 
 if __name__ == "__main__":
     
@@ -453,9 +442,8 @@ if __name__ == "__main__":
                 curr_state = state[turn][0]
                 action = state[turn][1]
                 new_state = state[turn][2]
-                reward = get_reward(curr_state, new_state)
+                reward = dqu.get_reward(curr_state, new_state)
                 
-                # TOTO: Fit network here
                 if turn == len(state) - 1:
                     new_q = reward
                 else:
