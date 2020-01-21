@@ -184,16 +184,20 @@ class PokeAgent(TrainablePlayer):
 
     def action_to_move(self, action, battle: Battle):
         orders = []
+        # Get moves
         for move in battle.available_moves:
             if battle.can_mega_evolve:
                 orders.append(self.create_order(move, mega=True))
             else:
                 orders.append(self.create_order(move))
 
+        # Get switches
         for key in battle.team:
             if battle.team[key].active:
                 continue
             orders.append(self.create_order(battle.team[key]))
+
+        # Handle exceptions
         if not battle.available_moves:
             action -= 4
         if len(battle.available_moves) == 1 and not battle.available_switches:
@@ -257,6 +261,29 @@ class PokeAgent(TrainablePlayer):
                 message.append([state, action, new_state])  
         self.conn.send(message)
         # ack = self.conn.recv()
+
+##########################################################################
+#                                                                        #
+#                          HUMAN BATTLE METHOD                           #
+#                                                                        #
+##########################################################################
+
+async def battle_human(future, child):
+    
+    player_1_configuration = PlayerConfiguration("Agent player", None)
+
+    agent_player = PokeAgent(
+        player_configuration=player_1_configuration,
+        battle_format="gen7letsgorandombattle",
+        server_configuration=LocalhostServerConfiguration,
+        conn=child,
+        train=False
+    )
+
+    await agent_player.accept_challenges(None, 1)
+
+    future.set_result("I'm done!")
+    agent_player.conn.send([-1])
 
 ##########################################################################
 #                                                                        #
@@ -354,6 +381,8 @@ def startPSthread(child, mode, opponent):
     future = asyncio.Future()
     if mode == "train":
         asyncio.ensure_future(training(future, child, opponent))
+    elif mode == "human":
+        asyncio.ensure_future(battle_human(future, child))
     else:
         asyncio.ensure_future(evaluating(future, child, opponent))
     loop.run_until_complete(future)
@@ -366,24 +395,28 @@ def startPSthread(child, mode, opponent):
 ##########################################################################
 
 def arguments_error(reason):
-    print(reason + ': Usage is python <script path> <mode> <opponent> [model path]')
-    print('Mode is either \"train\" or \"evaluate\"')
+    print(reason + ': Usage is python <script path> <mode> [opponent] [model path]')
+    print('Mode is either \"train\", \"evaluate\" or \"human\"')
+    print('If mode is \"train\" or \"evaluate\": [opponent] is required"')
     print('Opponent is either \"random\" or \"aggressive\"')
-    print('If mode is \"evaluate\": \"model path\" is required')
+    print('If mode is \"evaluate\" or \"human\": [model path] is required')
     sys.exit()
 
 if __name__ == "__main__":
     
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         arguments_error("Wrong arguments")
 
-    if sys.argv[1] != "train" and sys.argv[1] != "evaluate":
+    if sys.argv[1] != "train" and sys.argv[1] != "evaluate" and sys.argv[1] != "human":
         arguments_error("Wrong mode")
+
+    if sys.argv[1] == "train" and len(sys.argv) < 3:
+        arguments_error("No opponent specified")
 
     if sys.argv[1] == "evaluate" and len(sys.argv) != 4:
         arguments_error("No model specified")
 
-    if sys.argv[2] != "random" and sys.argv[2] != "aggressive":
+    if (sys.argv[1] == "evaluate" or sys.argv[1] == "train") and sys.argv[2] != "random" and sys.argv[2] != "aggressive":
         arguments_error("Wrong opponent")
 
     gamma = 0.95
@@ -391,7 +424,10 @@ if __name__ == "__main__":
     parent, child = Pipe()
 
     pool = Pool(processes=1)
-    result = pool.apply_async(startPSthread, (child, sys.argv[1], sys.argv[2],))
+    if (sys.argv[1] == "human"):
+        result = pool.apply_async(startPSthread, (child, sys.argv[1], "",))
+    else:
+        result = pool.apply_async(startPSthread, (child, sys.argv[1], sys.argv[2],))
 
     if sys.argv[1] == "train" and len(sys.argv) < 4:
         model = Sequential()
@@ -403,7 +439,9 @@ if __name__ == "__main__":
         model._make_predict_function()
         model.compile(loss="categorical_crossentropy", optimizer="rmsprop", metrics=["accuracy"])
     else:
-        if os.path.isfile(sys.argv[3]):
+        if os.path.isfile(sys.argv[2]):
+            model = load_model(sys.argv[2])
+        elif os.path.isfile(sys.argv[3]):
             model = load_model(sys.argv[3])
         else:
             arguments_error("Wrong model path")

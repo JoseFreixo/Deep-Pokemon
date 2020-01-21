@@ -33,3 +33,44 @@ LABELS: (em chance)
 - Switch 5
 
 9
+
+
+### TREINO CONTRA RANDOM ###
+## AVALIAÇÃO CONTRA RANDOM / AGGRESSIVE ##
+model001 - 34% / 08%
+model100 - 80% / 21%
+model200 - 39% / 20%
+model300 - 38% / 04%
+model400 - 72% / 22%
+model500 - 73% / 13%
+model600 - 75% / 16%
+
+### TREINO CONTRA AGGRESSIVE (a partir do model400) ###
+## AVALIAÇÃO CONTRA RANDOM / AGGRESSIVE ##
+model400_agg001 - 70% / 20%
+model400_agg100 - 84% / 25%
+model400_agg200 - 32% / 10%
+model400_agg300 - 39% / 07%
+model400_agg400 - 33% / 02%
+model400_agg500 - 42% / 09%
+model400_agg600 - 63% / 13%
+
+### TREINO CONTRA AGGRESSIVE (a partir do model100) ###
+## AVALIAÇÃO CONTRA RANDOM / AGGRESSIVE ##
+model100_agg001 - 81% / 23%
+model100_agg100 - 30% / 05%
+model100_agg200 - 82% / 25%
+model100_agg300 - 37% / 02%
+model100_agg400 - 33% / 10%
+model100_agg500 - 40% / 11%
+model100_agg600 - 67% / 15%
+
+### TREINO CONTRA AGGRESSIVE ###
+## AVALIAÇÃO CONTRA RANDOM / AGGRESSIVE ##
+model_agg001 - 84% / 26%
+model_agg100 - 36% / 11%
+model_agg200 - 36% / 04%
+model_agg300 - 74% / 24%
+model_agg400 - 76% / 27%
+model_agg500 - 51% / 12%
+model_agg600 - 41% / 07%
