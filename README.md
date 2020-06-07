@@ -1,5 +1,7 @@
 # Deep Pokemon
 
+Deep Pokémon is a Pokémon Battler Artificial Intelligence based on Deep-Q Learning, and is run on the Pokémon Battle Simulator - Pokémon Showdown!
+
 ## Setup
 
 ### Install poke-env
